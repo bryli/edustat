@@ -5,6 +5,8 @@ library(ggplot2)
 library(readr)
 #library(ggiraphExtra)
 
+TYPES <- c('Elementary', 'High School', 'Middle')
+SHORT_TYPES <- c('ES', 'HS', 'MS')
 fulldata <- fread('md_report_card.csv', na.strings="--")
 names(fulldata) <- replace(names(fulldata), 1, 'School Name')
 fulldata <- cbind(fulldata %>% select('School Name', 'School County', 'School Type'),
@@ -50,7 +52,7 @@ summary(typesp.models[['Elementary']])
 summary(typesp.models[['Middle']])
 summary(typesp.models[['High School']])
 residlist <- setNames(unlist(sapply(typesp.models, resid)),
-                      unlist(sapply(c('Elementary', 'High School', 'Middle'),
+                      unlist(sapply(TYPES,
                           function(x){
                             slctdata %>% filter(TYPE==x) %>% pull(NAME)
                           })))
@@ -58,13 +60,32 @@ residlist_mag <- residlist[order(abs(residlist), decreasing=TRUE)]
 residlist_neg <- sort(residlist[residlist <= 0])
 residlist_pos <- sort(residlist[residlist > 0], decreasing=TRUE)
 
-resid_sep <- mapply(X=c('Elementary', 'High School', 'Middle'), Y=typesp.models, function(X, Y){
+resid_sep <- mapply(X=TYPES, Y=typesp.models, function(X, Y){
   setNames(resid(Y), slctdata %>% filter(TYPE==X) %>% pull(NAME))
 })
 resid_smag <- lapply(resid_sep, function(x){x[order(abs(x), decreasing=TRUE)]})
 resid_sneg <- lapply(resid_sep, function(x){sort(x[x <= 0])})
 resid_spos <- lapply(resid_sep, function(x){sort(x[x > 0], decreasing=TRUE)})
-
+autowrite <- function(toWrite, namelist){
+  mapply(X=toWrite, Y=namelist, function(X, Y){
+    if (is.atomic(X)){X <- bind_rows(X)}
+    fwrite(X, file=Y, row.names = TRUE)
+  })
+}
+writemodels <- function(modellist, namelist){
+  mapply(X = modellist, Y=namelist, function(X, Y){
+    sink(Y)
+    summary(X)
+    sink()
+  })
+}
+fwrite(bind_rows(residlist_mag), 'ResidMag.csv')
+fwrite(bind_rows(residlist_neg), 'ResidNeg.csv')
+fwrite(bind_rows(residlist_pos), 'ResidPos.csv')
+autowrite(resid_smag, paste0('ResidMag_', TYPES, '.csv'))
+autowrite(resid_sneg, paste0('ResidNeg_', TYPES, '.csv'))
+autowrite(resid_spos, paste0('ResidPos_', TYPES, '.csv'))
+writemodels(typesp.models, c('MultReg'))
 # for (county in names(cntydata)){
 #   cntymodels[[county]] = lm(PTS ~ FARMS, data=cntydata[[county]])
 # }
